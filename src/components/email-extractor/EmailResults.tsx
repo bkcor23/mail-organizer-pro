@@ -77,6 +77,66 @@ const EmailResults: React.FC<EmailResultsProps> = ({ emailGroups }) => {
   const exportToExcel = () => {
     // Crear un nuevo libro de Excel
     const workbook = XLSX.utils.book_new();
+    
+    // Crear hojas separadas para cada tipo de correo
+    const exportByDomainToSheet = (domainMap: Record<string, string[]>, sheetName: string) => {
+      // Obtener todos los dominios para este tipo de correo
+      const domains = Object.keys(domainMap);
+      
+      if (domains.length === 0) {
+        return null; // No crear hoja si no hay dominios
+      }
+      
+      // Crear una matriz de encabezados (dominios)
+      const headers = domains;
+      
+      // Encontrar la cantidad máxima de correos en cualquier dominio
+      const maxEmails = Math.max(...domains.map(domain => domainMap[domain].length));
+      
+      // Crear la matriz de datos
+      const data = [headers];
+      
+      // Llenar las filas con los correos electrónicos
+      for (let i = 0; i < maxEmails; i++) {
+        const row = domains.map(domain => {
+          return i < domainMap[domain].length ? domainMap[domain][i] : "";
+        });
+        data.push(row);
+      }
+      
+      // Convertir la matriz a una hoja de trabajo
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      
+      // Ajustar el ancho de las columnas
+      const colWidths = domains.map(() => ({ wch: 30 }));
+      ws['!cols'] = colWidths;
+      
+      return { worksheet: ws, name: sheetName };
+    };
+    
+    // Crear hoja para cada tipo de correo
+    const sheets = [
+      exportByDomainToSheet(personal, "Correos Personales"),
+      exportByDomainToSheet(corporate, "Correos Corporativos"),
+      exportByDomainToSheet(educational, "Correos Educativos"),
+      exportByDomainToSheet(others, "Otros Correos")
+    ].filter(sheet => sheet !== null);
+    
+    // Añadir las hojas al libro
+    sheets.forEach(sheet => {
+      if (sheet) {
+        XLSX.utils.book_append_sheet(workbook, sheet.worksheet, sheet.name);
+      }
+    });
+    
+    // Exportar y descargar
+    XLSX.writeFile(workbook, "correos_por_dominios.xlsx");
+  };
+  
+  // Función para exportar en el formato original (por categoría)
+  const exportToExcelByCategories = () => {
+    // Crear un nuevo libro de Excel
+    const workbook = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([
       ["Correos Personales", "Correos Corporativos", "Correos Educativos", "Otros Correos"]
     ]);
@@ -109,10 +169,10 @@ const EmailResults: React.FC<EmailResultsProps> = ({ emailGroups }) => {
     }
     
     // Añadir la hoja al libro
-    XLSX.utils.book_append_sheet(workbook, ws, "Correos Extraídos");
+    XLSX.utils.book_append_sheet(workbook, ws, "Correos por Categorías");
     
     // Exportar y descargar
-    XLSX.writeFile(workbook, "correos_extraidos.xlsx");
+    XLSX.writeFile(workbook, "correos_por_categorias.xlsx");
   };
   
   // Componente para renderizar un grupo de correos
@@ -171,7 +231,11 @@ const EmailResults: React.FC<EmailResultsProps> = ({ emailGroups }) => {
           </Button>
           <Button onClick={exportToExcel} variant="outline" size="sm">
             <Save className="mr-2 h-4 w-4" />
-            Exportar Excel
+            Excel por Dominios
+          </Button>
+          <Button onClick={exportToExcelByCategories} variant="outline" size="sm">
+            <Save className="mr-2 h-4 w-4" />
+            Excel por Categorías
           </Button>
         </div>
       </div>
