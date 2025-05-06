@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmailGroups } from "@/types";
 import { Save } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface EmailResultsProps {
   emailGroups: EmailGroups;
@@ -72,6 +73,47 @@ const EmailResults: React.FC<EmailResultsProps> = ({ emailGroups }) => {
     link.click();
     document.body.removeChild(link);
   };
+
+  const exportToExcel = () => {
+    // Crear un nuevo libro de Excel
+    const workbook = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Correos Personales", "Correos Corporativos", "Correos Educativos", "Otros Correos"]
+    ]);
+    
+    // Convertir los correos en columnas verticales
+    const personalEmails = Object.values(personal).flat();
+    const corporateEmails = Object.values(corporate).flat();
+    const educationalEmails = Object.values(educational).flat();
+    const otherEmails = Object.values(others).flat();
+    
+    // Encontrar la longitud máxima
+    const maxRows = Math.max(
+      personalEmails.length,
+      corporateEmails.length,
+      educationalEmails.length,
+      otherEmails.length
+    );
+    
+    // Agregar cada fila
+    for (let i = 0; i < maxRows; i++) {
+      const row = [
+        i < personalEmails.length ? personalEmails[i] : "",
+        i < corporateEmails.length ? corporateEmails[i] : "",
+        i < educationalEmails.length ? educationalEmails[i] : "",
+        i < otherEmails.length ? otherEmails[i] : ""
+      ];
+      
+      // Agregar al worksheet en la posición correspondiente
+      XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
+    }
+    
+    // Añadir la hoja al libro
+    XLSX.utils.book_append_sheet(workbook, ws, "Correos Extraídos");
+    
+    // Exportar y descargar
+    XLSX.writeFile(workbook, "correos_extraidos.xlsx");
+  };
   
   // Componente para renderizar un grupo de correos
   const EmailGroup = ({ 
@@ -126,6 +168,10 @@ const EmailResults: React.FC<EmailResultsProps> = ({ emailGroups }) => {
           <Button onClick={exportToJSON} variant="outline" size="sm">
             <Save className="mr-2 h-4 w-4" />
             Exportar JSON
+          </Button>
+          <Button onClick={exportToExcel} variant="outline" size="sm">
+            <Save className="mr-2 h-4 w-4" />
+            Exportar Excel
           </Button>
         </div>
       </div>

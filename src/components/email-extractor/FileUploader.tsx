@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Upload, File, X } from "lucide-react";
 import { extractEmails } from "@/utils/emailExtractor";
+import * as XLSX from "xlsx";
 
 interface FileUploaderProps {
   onExtractEmails: (emails: string[]) => void;
@@ -55,7 +56,14 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onExtractEmails }) => {
     let hasInvalidFile = false;
 
     Array.from(fileList).forEach(file => {
-      if (file.type === "text/plain" || file.type === "application/pdf") {
+      if (
+        file.type === "text/plain" || 
+        file.type === "application/pdf" ||
+        file.type === "application/vnd.ms-excel" || 
+        file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.name.endsWith(".xls") || 
+        file.name.endsWith(".xlsx")
+      ) {
         newFiles.push(file);
       } else {
         hasInvalidFile = true;
@@ -66,7 +74,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onExtractEmails }) => {
       toast({
         variant: "destructive",
         title: "Formato no soportado",
-        description: "Solo se aceptan archivos TXT y PDF.",
+        description: "Solo se aceptan archivos TXT, PDF, XLS y XLSX.",
       });
     }
 
@@ -94,9 +102,14 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onExtractEmails }) => {
       const allEmails: string[] = [];
       
       for (const file of files) {
-        const text = await readFileContent(file);
-        const extractedEmails = extractEmails(text);
-        allEmails.push(...extractedEmails);
+        if (file.name.endsWith(".xls") || file.name.endsWith(".xlsx")) {
+          const excelEmails = await extractEmailsFromExcel(file);
+          allEmails.push(...excelEmails);
+        } else {
+          const text = await readFileContent(file);
+          const extractedEmails = extractEmails(text);
+          allEmails.push(...extractedEmails);
+        }
       }
       
       // Eliminar duplicados
@@ -118,6 +131,44 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onExtractEmails }) => {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const extractEmailsFromExcel = async (file: File): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          // Procesar la primera hoja por defecto
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Convertir a texto todo el contenido
+          const jsonData = XLSX.utils.sheet_to_json<{[key: string]: any}>(worksheet, { header: "A" });
+          let allText = "";
+          
+          // Extraer todo el texto de cada celda
+          jsonData.forEach(row => {
+            Object.values(row).forEach(cell => {
+              if (cell !== null && cell !== undefined) {
+                allText += cell.toString() + " ";
+              }
+            });
+          });
+          
+          // Extraer correos usando la función existente
+          const emails = extractEmails(allText);
+          resolve(emails);
+        } catch (error) {
+          console.error("Error al procesar archivo Excel:", error);
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error("No se pudo leer el archivo Excel"));
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const readFileContent = (file: File): Promise<string> => {
@@ -151,15 +202,15 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onExtractEmails }) => {
           type="file"
           ref={fileInputRef}
           onChange={handleFileInputChange}
-          accept=".txt,.pdf"
+          accept=".txt,.pdf,.xls,.xlsx"
           multiple
           className="hidden"
         />
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center p-6">
           <Upload className="h-12 w-12 mb-4 text-primary" />
           <h3 className="text-lg font-medium mb-1">Arrastra y suelta archivos aquí</h3>
           <p className="text-sm text-muted-foreground mb-2">o haz clic para seleccionar archivos</p>
-          <p className="text-xs text-muted-foreground">Formatos soportados: .txt, .pdf</p>
+          <p className="text-xs text-muted-foreground">Formatos soportados: .txt, .pdf, .xls, .xlsx</p>
         </div>
       </Card>
 
